@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0F766E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Upajna">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/icon-192.png">
+<title>Upajna</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- Sign in: bold teal page, headline on the left, form card on the right -->
+<div class="login" id="login" hidden>
+  <div class="login-top">
+    <div class="brand on-dark"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" class="mark-bg"/><path d="M19 26v9a13 13 0 0 0 26 0v-9" fill="none" class="mark-u" stroke-width="8" stroke-linecap="round"/><circle cx="45" cy="13.5" r="5" class="mark-dot"/></svg><span>Upajna</span></div>
+    <p class="login-credit">Built by Lakshmi Gnanitha Guttikonda</p>
+  </div>
+  <div class="login-main">
+    <section class="login-pitch">
+      <h1>Find it.<br>Tailor it.<br><span>Apply when you say.</span></h1>
+      <p>New matching roles three times a day, a resume tailored honestly for each one, and nothing sent without your approval.</p>
+    </section>
+    <form class="login-card" id="loginForm">
+      <h2>Welcome back</h2>
+      <p class="muted">Sign in to see today's matches.</p>
+      <input type="text" name="username" value="upajna" autocomplete="username" hidden>
+      <div class="field"><label for="pw">Password</label><input type="password" id="pw" autocomplete="current-password" required></div>
+      <button class="btn primary block-btn" type="submit">Sign in</button>
+      <div class="notice bad" id="loginErr" hidden></div>
+      <p class="small faint">Private to you. Only you can sign in.</p>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
+<!-- Top bar: brand, navigation, next search, avatar -->
+<header class="topbar">
+  <div class="brand"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" class="mark-bg"/><path d="M19 26v9a13 13 0 0 0 26 0v-9" fill="none" class="mark-u" stroke-width="8" stroke-linecap="round"/><circle cx="45" cy="13.5" r="5" class="mark-dot"/></svg><span>Upajna</span></div>
+  <nav class="tabs" role="tablist" aria-label="Main">
+    <button class="tab" role="tab" aria-selected="true" data-view="inbox">Inbox <span class="count" id="cInbox">0</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-view="review">Review <span class="count" id="cReview">0</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-view="tracker">Tracker <span class="count" id="cTracker">0</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-view="profile">Settings</button>
+  </nav>
+  <div class="topbar-end">
+    <span class="faint small" id="nextSearch"></span>
+    <div class="avatar" id="avatar" aria-hidden="true"></div>
+  </div>
+</header>
+
+<!-- Inbox -->
+<section class="view page" id="view-inbox">
+  <div class="notice warn" id="configNote" hidden></div>
+  <div class="page-head">
+    <div><h1>New jobs</h1><p class="faint" id="lastRun"></p></div>
+    <button class="btn" id="searchNow">Search now</button>
+  </div>
+  <form class="addbar" id="addForm" autocomplete="off">
+    <div class="addbar-row">
+      <input type="text" id="addUrl" inputmode="url" aria-label="Job link" placeholder="Paste a job link from LinkedIn, Greenhouse, Lever, Ashby or any careers page">
+      <select id="addRoleSel" aria-label="Which resume to use"></select>
+      <button class="btn primary" id="addJob" type="submit">Add job</button>
+    </div>
+    <div class="notice warn" id="addMsg" hidden></div>
+    <div class="field" id="addPaste" hidden><label for="addJd">Job description</label><textarea id="addJd" class="tall" placeholder="Open the job, select all of the description, copy it and paste it here."></textarea></div>
+  </form>
+  <div class="pills" id="sortSeg">
+    <button type="button" class="pill-btn" data-s="score" aria-pressed="true">Best match</button>
+    <button type="button" class="pill-btn" data-s="new" aria-pressed="false">Newest</button>
+    <span class="pill-sep" aria-hidden="true"></span>
+    <button type="button" class="pill-btn" data-f="remote" aria-pressed="false">Remote only</button>
+    <button type="button" class="pill-btn" data-f="auto" aria-pressed="false">Auto-apply ready</button>
+    <span id="rolePills" class="pills-inline"></span>
+  </div>
+  <div class="table" id="inboxList" role="table" aria-label="New jobs"></div>
+  <div class="selbar" id="selBar" hidden>
+    <span id="selText">0 selected</span>
+    <button class="btn ghost-dark" id="skipSel">Skip</button>
+    <button class="btn accent-bright" id="applySel">Tailor and review</button>
+  </div>
+</section>
+
+<!-- Review: list | resume | decision rail -->
+<section class="view" id="view-review" hidden>
+  <div class="notice" id="tailoringNote" hidden></div>
+  <div class="review">
+    <aside class="review-list" id="reviewList"></aside>
+    <section class="review-main" id="reviewDetail"></section>
+    <aside class="review-rail" id="reviewRail"></aside>
+  </div>
+</section>
+
+<!-- Tracker -->
+<section class="view page" id="view-tracker" hidden>
+  <div class="page-head"><div><h1>Applications</h1><p class="faint">Everything you've approved, and where it stands</p></div></div>
+  <div class="stats" id="stats"></div>
+  <div class="pills" id="trackSeg"></div>
+  <div class="table" id="trackList" role="table" aria-label="Applications"></div>
+</section>
+
+<!-- Settings -->
+<section class="view page" id="view-profile" hidden>
+  <div class="page-head"><div><h1>Settings</h1><p class="faint">How Upajna searches, and what it puts on your applications</p></div></div>
+  <div class="settings">
+    <div class="card span-2">
+      <h2>Automation</h2>
+      <div class="auto">
+        <div class="auto-item"><span class="label">Job search</span><strong id="schedText">11am · 3pm · 7pm daily</strong><span class="small muted" id="autoSearch"></span></div>
+        <div class="auto-item"><span class="label">Applying</span><strong id="applyMode"></strong><span class="small muted">Greenhouse, Lever and Ashby forms are filled on the server. LinkedIn, Indeed and Workday come back to you with your answers ready.</span></div>
+      </div>
+      <div class="row"><button class="btn" id="enablePush">Turn on notifications</button><span class="small muted" id="pushState"></span></div>
+      <p class="small faint" id="installHint">To install on iPhone: tap Share, then Add to Home Screen. On Android: tap the menu, then Install app.</p>
+    </div>
+
+    <div class="card span-2">
+      <h2>Roles and resumes</h2>
+      <p class="small faint">Each role has its own job titles and its own master resume. Upajna searches every role that has a resume, and tailors each job from the matching one. Tailoring only trims and rewords what's in that resume. It never invents experience.</p>
+      <div class="roles" id="roles"></div>
+      <div class="row"><button class="btn" id="addRole">Add a role</button><button class="btn primary" id="saveRoles">Save roles</button></div>
+    </div>
+
+    <div class="card span-2">
+      <h2>Send jobs to Upajna</h2>
+      <p class="small faint">Upajna searches job sites that allow it on its own. For LinkedIn, send it the jobs you find. It reads that one public job page and never signs in to your account.</p>
+      <div class="send-ways">
+        <div class="auto-item"><span class="label">On a laptop</span><strong>One-click bookmark</strong>
+          <span class="small muted">Drag this button to your bookmarks bar. On any job page, click it to send the job to Upajna.</span>
+          <a class="btn small bookmarklet" id="bookmarklet" href="#" title="Drag me to your bookmarks bar">+ Send to Upajna</a></div>
+        <div class="auto-item"><span class="label">On Android</span><strong>Share menu</strong>
+          <span class="small muted">Install Upajna (browser menu, then Install app). In the LinkedIn app, tap Share on a job and pick Upajna.</span></div>
+        <div class="auto-item"><span class="label">Anywhere, including iPhone</span><strong>Copy and paste</strong>
+          <span class="small muted">Copy the job's link and paste it into the box at the top of your Inbox.</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Search filters</h2>
+      <p class="small faint">Apply to every role.</p>
+      <div class="grid2">
+        <div class="field"><label for="s_level">Experience level</label>
+          <select id="s_level"><option>Entry</option><option>Mid</option><option>Mid-Senior</option><option>Senior</option></select></div>
+        <div class="field"><label for="s_sponsor">Visa sponsorship</label>
+          <select id="s_sponsor"><option value="needs">I need sponsorship (hide jobs that don't sponsor)</option><option value="no">I don't need sponsorship</option></select></div>
+      </div>
+      <div class="field"><span class="flabel">Job types</span>
+        <div class="checks" id="s_types">
+          <label><input type="checkbox" value="Full-time"> Full-time</label>
+          <label><input type="checkbox" value="Contract (W2)"> Contract (W2)</label>
+          <label><input type="checkbox" value="Contract (C2C)"> Contract (C2C)</label>
+          <label><input type="checkbox" value="Contract-to-hire"> Contract-to-hire</label>
+          <label><input type="checkbox" value="Part-time"> Part-time</label>
+        </div></div>
+      <div class="field"><label for="s_excludes">Skip jobs that mention</label><input type="text" id="s_excludes" placeholder="e.g. Salesforce, SAP"></div>
+      <div class="grid2">
+        <div class="field"><label for="s_hours">Posted within (hours)</label><input type="number" id="s_hours" min="6" max="168"></div>
+        <div class="field"><label for="s_max">Max new jobs per role, per search</label><input type="number" id="s_max" min="5" max="50"></div>
+      </div>
+      <p class="small faint">Location: anywhere in the US, including remote.</p>
+      <div class="row"><button class="btn primary" id="saveSearch">Save search</button></div>
+    </div>
+
+    <div class="card">
+      <h2>My details</h2>
+      <p class="small faint">Used on every application.</p>
+      <div class="grid2">
+        <div class="field"><label for="p_name">Full name</label><input type="text" id="p_name"></div>
+        <div class="field"><label for="p_email">Email</label><input type="email" id="p_email"></div>
+        <div class="field"><label for="p_phone">Phone</label><input type="tel" id="p_phone"></div>
+        <div class="field"><label for="p_location">Current city, state</label><input type="text" id="p_location"></div>
+        <div class="field"><label for="p_linkedin">LinkedIn URL</label><input type="url" id="p_linkedin"></div>
+        <div class="field"><label for="p_portfolio">Portfolio / GitHub</label><input type="url" id="p_portfolio"></div>
+        <div class="field"><label for="p_auth">Authorized to work in the US?</label><input type="text" id="p_auth"></div>
+        <div class="field"><label for="p_sponsor">Need sponsorship now or in future?</label><input type="text" id="p_sponsor"></div>
+        <div class="field"><label for="p_salary">Salary expectations</label><input type="text" id="p_salary"></div>
+        <div class="field"><label for="p_start">Start date</label><input type="text" id="p_start"></div>
+        <div class="field"><label for="p_relocate">Open to relocation?</label><input type="text" id="p_relocate"></div>
+        <div class="field"><label for="p_workpref">Remote / hybrid / onsite</label><input type="text" id="p_workpref"></div>
+        <div class="field"><label for="p_years">Years of experience</label><input type="text" id="p_years"></div>
+        <div class="field"><label for="p_eeo">Gender, race, veteran, disability questions</label><input type="text" id="p_eeo" placeholder="e.g. Decline to answer"></div>
+      </div>
+      <div class="field"><label for="p_answers">Standard answers</label><textarea id="p_answers" placeholder="One per line, e.g.&#10;How did you hear about us? LinkedIn"></textarea></div>
+      <div class="row"><button class="btn primary" id="saveProfile">Save details</button></div>
+    </div>
+
+  </div>
+  <button class="btn ghost" id="logout">Sign out</button>
+</section>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="/app.js" type="module"></script>
+</body>
+</html>
