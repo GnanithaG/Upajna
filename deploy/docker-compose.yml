@@ -1,0 +1,60 @@
+# Upajna on one server: the app, its database, and Caddy for HTTPS.
+# You don't run this file by hand: deploy/setup.sh and deploy/update.sh do.
+name: upajna
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: upajna
+      POSTGRES_DB: upajna
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing from .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data      # survives restarts and updates
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U upajna -d upajna"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: ..                                 # the Dockerfile in the repo root (includes Chromium)
+    restart: unless-stopped
+    env_file:
+      - path: ../.env                         # your secrets; created by setup.sh, never in GitHub
+        required: false
+    environment:
+      DATABASE_URL: postgresql://upajna:${POSTGRES_PASSWORD}@db:5432/upajna
+      PORT: "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    shm_size: 1gb                             # Chromium needs shared memory to fill forms
+    expose: ["8000"]                          # reachable by Caddy only, not from the internet
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is missing from .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data                      # HTTPS certificates
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,12 @@
+# Caddy gets a free HTTPS certificate for DOMAIN from Let's Encrypt and renews it automatically,
+# then passes every request on to the app.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

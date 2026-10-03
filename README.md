@@ -72,7 +72,7 @@ flowchart LR
 
 ## Tech stack
 
-Python 3.12 · FastAPI · SQLAlchemy 2 (Postgres / SQLite) · Anthropic Claude API · Pydantic v2 · Playwright · APScheduler · python-docx · pypdf · Web Push (VAPID) · vanilla JS PWA · Docker · Railway · pytest · GitHub Actions
+Python 3.12 · FastAPI · SQLAlchemy 2 (Postgres / SQLite) · Anthropic Claude API · Pydantic v2 · Playwright · APScheduler · python-docx · pypdf · Web Push (VAPID) · vanilla JS PWA · Docker Compose · Caddy · AWS Lightsail · pytest · GitHub Actions
 
 ## Project structure
 
@@ -88,51 +88,52 @@ app/
   apply/             worker.py (Playwright), collect_fields.js, empty_required.js
   documents.py       Word resume / cover letter, resume parsing
   push.py            phone notifications
-static/              the phone app (HTML, JS, service worker, manifest)
+static/              the web and phone app (HTML, JS, service worker, manifest)
+deploy/              docker-compose.yml, Caddyfile, setup.sh, update.sh, backup.sh
 tests/               pytest: API flow, filters, AI parsing/retry, real-browser form filling
 ```
 
 ---
 
-## Deploy it (about 30 minutes)
+## Deploy it on AWS (about 30 minutes)
+
+Upajna runs on one small Ubuntu server: the app, a Postgres database and [Caddy](https://caddyserver.com) for free automatic HTTPS, all started by Docker Compose (`deploy/`). Full walkthrough with explanations: [docs/system-design/07-deployment.md](docs/system-design/07-deployment.md).
 
 ### 1. Get your keys
 
-| What | Where | Env variable |
+| What | Where | Needed? |
 |---|---|---|
-| Claude API key | console.anthropic.com → API Keys | `ANTHROPIC_API_KEY` |
-| JSearch | rapidapi.com → JSearch → Subscribe → copy **X-RapidAPI-Key** | `JSEARCH_API_KEY` |
-| Adzuna | developer.adzuna.com → Dashboard | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
+| Claude API key | console.anthropic.com → API Keys | Yes |
+| JSearch | rapidapi.com → JSearch → Subscribe → copy **X-RapidAPI-Key** | Optional (scheduled search) |
+| Adzuna | developer.adzuna.com → Dashboard | Optional (scheduled search) |
 
-Check each provider's current plan limits and prices. By default Upajna makes about 3 JSearch requests per run (about 270 a month); lower `JSEARCH_QUERIES_PER_RUN` if needed.
+Without job-search keys, Upajna still works with jobs you send by link.
 
-### 2. Push to GitHub
+### 2. Create the server (AWS Lightsail)
+
+1. Lightsail → **Create instance** → Linux/Unix → **OS Only → Ubuntu 24.04 LTS** → the **2 GB** plan → name it `upajna`.
+2. **Networking → Create static IP** and attach it to `upajna`.
+3. On the instance's **Networking** tab, add a firewall rule for **HTTPS (443)**.
+
+(If Lightsail isn't available on your account, an EC2 `t3.small` running Ubuntu 24.04 works the same way: open ports 80 and 443 in its security group and attach an Elastic IP.)
+
+### 3. Run the setup script
+
+On the instance, choose **Connect using SSH** and paste:
 
 ```bash
-cd upajna
-git init && git add . && git commit -m "Upajna"
-git remote add origin https://github.com/<you>/upajna.git   # create the repo on github.com first
-git push -u origin main
+bash <(curl -fsSL https://raw.githubusercontent.com/GnanithaG/Upajna/main/deploy/setup.sh)
 ```
 
-### 3. Railway
+It installs Docker, asks for your sign-in password and API keys (kept only on the server in `~/upajna/.env`), builds and starts everything, schedules a nightly database backup, and prints your address, e.g. `https://44-55-66-77.sslip.io`.
 
-1. railway.com → **New Project → Deploy from GitHub repo** → `upajna`. It builds from the `Dockerfile`, which includes Chromium.
-2. **+ New → Database → PostgreSQL.**
-3. On the `upajna` service → **Variables**:
-   - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
-   - `APP_PASSWORD` = the password you'll sign in with
-   - `SESSION_SECRET` = output of `python -c "import secrets; print(secrets.token_hex(32))"`
-   - `ANTHROPIC_API_KEY`, `JSEARCH_API_KEY`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`
-   - `APPLY_SUBMIT` = `false` (test mode first)
-   - Notifications: run `python scripts/gen_vapid.py` and add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:you@email.com`
-4. **Settings → Networking → Generate Domain.** That's your app.
+To update after new code is pushed: `~/upajna/deploy/update.sh`
 
 ### 4. On your phone
 
 1. Open the URL and sign in.
 2. Add it to your home screen: iPhone **Share → Add to Home Screen**; Android **⋮ → Install app**.
-3. In **Me**:
+3. In **Settings**:
    - Under **Roles and resumes**, upload a resume for each role you want to search for.
    - Fill in your details: work authorization, sponsorship, salary, start date.
    - Check the search settings.
@@ -141,7 +142,7 @@ git push -u origin main
 
 ### 5. Turn on real submission
 
-In test mode, approved Greenhouse, Lever and Ashby applications are filled but not submitted, and you get a screenshot in **Tracker**. When a few look right, set `APPLY_SUBMIT=true`.
+In test mode, approved Greenhouse, Lever and Ashby applications are filled but not submitted, and you get a screenshot in **Tracker**. When a few look right, change `APPLY_SUBMIT=false` to `true` in `~/upajna/.env` on the server and run `~/upajna/deploy/update.sh`.
 
 ## Run locally
 
@@ -151,7 +152,7 @@ pip install -r requirements-dev.txt
 playwright install chromium
 cp .env.example .env        # fill in keys; SQLite is used by default
 uvicorn app.main:app --reload
-pytest -q                   # 21 tests; runs offline with mocked APIs
+pytest -q                   # runs offline with mocked APIs (set TEST_DATABASE_URL to test on Postgres)
 ```
 
 ## Limits

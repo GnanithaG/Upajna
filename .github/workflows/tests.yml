@@ -3,9 +3,32 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Run every test twice: on SQLite (like a laptop) and on Postgres 16 (like the AWS server).
+    strategy:
+      matrix:
+        database: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: test, POSTGRES_DB: upajna_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r requirements-dev.txt && playwright install --with-deps chromium
-      - run: pytest -q
+      - name: pytest (${{ matrix.database }})
+        run: pytest -q
+        env:
+          TEST_DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql://postgres:test@localhost:5432/upajna_test' || '' }}
+
+  # Make sure the production image still builds.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t upajna .
+      - run: docker compose -f deploy/docker-compose.yml config -q
+        env: { DOMAIN: example.sslip.io, POSTGRES_PASSWORD: ci-only }

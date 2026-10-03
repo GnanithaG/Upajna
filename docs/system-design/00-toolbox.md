@@ -7,7 +7,7 @@ Think of the tools in layers, from your keyboard to the internet:
 ```mermaid
 flowchart LR
   A["Your laptop<br/>Git, Git Bash, VS Code"] -->|git push| B["GitHub<br/>code + Actions tests"]
-  B -->|auto-deploy| C["Railway<br/>runs Docker container"]
+  B -->|update.sh pulls| C["AWS server<br/>Docker Compose: app + Postgres + Caddy"]
   C --> D["Inside the container<br/>Python, FastAPI, Playwright..."]
   D --> E["Outside services<br/>Claude, JSearch, Adzuna"]
   F["Your phone / browser<br/>the PWA"] -->|HTTPS| C
@@ -19,20 +19,22 @@ flowchart LR
 |---|---|---|
 | **Git** | Version control: records every change as a "commit" so you can see history and undo mistakes | You commit changes on your laptop, then `git push` |
 | **Git Bash** | A terminal for Windows that runs Git and Linux-style commands | Where you typed `git push` |
-| **GitHub** | A website that stores Git repositories online | Holds `GnanithaG/Upajna`; Railway pulls code from here |
+| **GitHub** | A website that stores Git repositories online | Holds `GnanithaG/Upajna`; the AWS server pulls code from here |
 | **GitHub Actions** | GitHub's robot that runs commands on every push | Runs the 21 tests (`.github/workflows/tests.yml`); the green check means they passed |
 
-## 2. Where the app runs: Railway and Docker
+## 2. Where the app runs: AWS and Docker
 
 | Tool | What it is | How Upajna uses it |
 |---|---|---|
-| **Railway** | A cloud hosting service. You give it your code; it runs it on its computers 24/7 and gives you a public web address | Runs the Upajna server and its database, so the app works from anywhere and the 11/3/7 searches happen while your laptop is off |
-| **Docker** | Packages the app plus everything it needs (Python, Chromium, libraries) into one "container" image that runs the same everywhere | The `Dockerfile` is the recipe; Railway builds it on each deploy |
-| **Environment variables** | Settings given to the app from outside the code | API keys and passwords live in Railway's **Variables** tab, never in GitHub |
+| **AWS Lightsail** | Amazon's simple cloud servers: a rented computer that's always on, at a fixed monthly price | Runs Upajna, its database and Caddy, so the app works from anywhere and the 11/3/7 searches happen while your laptop is off |
+| **Docker Compose** | Starts several containers together from one file | `deploy/docker-compose.yml` runs the app, Postgres and Caddy |
+| **Caddy** | A web server that handles HTTPS automatically | Gets and renews a free certificate, then forwards requests to the app |
+| **Docker** | Packages the app plus everything it needs (Python, Chromium, libraries) into one "container" image that runs the same everywhere | The `Dockerfile` is the recipe; the server builds it on each update |
+| **Environment variables** | Settings given to the app from outside the code | API keys and passwords live in `~/upajna/.env` on the server, never in GitHub |
 
-**Railway in one sentence:** it's a computer in the cloud that you rent by the hour, with the setup work done for you. The alternatives are Render, Fly.io, Heroku, or a raw server on AWS; Railway is one of the simplest. Its Hobby plan is $5/month and includes $5 of usage; Upajna may cost a bit more because launching Chromium to fill forms uses memory. Check railway.com/pricing for current details.
+**Why AWS:** you already have an account with credits, and running your own server teaches what managed hosts like Railway or Render do for you. Step 7 (`07-deployment.md`) walks through it.
 
-**Deploy flow:** you `git push` → GitHub stores it → Railway notices, builds the Docker image, starts the new version → your phone gets the update on next open.
+**Deploy flow:** you `git push` → GitHub stores it → on the server, `deploy/update.sh` backs up the database, pulls the code, rebuilds the image and restarts the app → your phone gets the update on next open.
 
 ## 3. The server (the "backend")
 
@@ -51,7 +53,7 @@ flowchart LR
 |---|---|---|
 | **SQLAlchemy** | Lets Python talk to databases without hand-writing SQL | Tables and queries in `app/db.py` |
 | **SQLite** | A database stored in a single file | Used when you run locally (`data/upajna.db`) |
-| **PostgreSQL** | A full database server | Used on Railway; survives restarts and redeploys |
+| **PostgreSQL** | A full database server | Used on the AWS server; survives restarts and updates |
 
 Same code, two databases: `DATABASE_URL` decides which one. This is a common pattern: simple locally, robust in production.
 

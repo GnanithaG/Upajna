@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     @property
     def sqlalchemy_url(self) -> str:
         url = self.database_url
-        # Railway/Heroku style URLs → psycopg3 driver
+        # postgres:// and postgresql:// URLs → the psycopg3 driver
         if url.startswith("postgres://"):
             url = "postgresql://" + url[len("postgres://"):]
         if url.startswith("postgresql://"):
@@ -51,8 +51,6 @@ class Settings(BaseSettings):
             m.append("SESSION_SECRET")
         if not self.anthropic_api_key and not self.mock_external:
             m.append("ANTHROPIC_API_KEY")
-        if not (self.jsearch_api_key or self.adzuna_app_id) and not self.mock_external:
-            m.append("JSEARCH_API_KEY or ADZUNA_APP_ID/ADZUNA_APP_KEY")
         return m
 
 

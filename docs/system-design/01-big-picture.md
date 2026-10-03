@@ -7,7 +7,7 @@
 Every web application has two halves.
 
 - **The client** is what runs on your device: the browser (or the phone app, which is a website installed to your home screen). It draws the screens and reacts to taps. It holds almost nothing permanently.
-- **The server** is a program running on a computer somewhere else (Railway, for Upajna). It holds the data, the secrets (API keys), and does the heavy or slow work.
+- **The server** is a program running on a computer somewhere else (an AWS server, for Upajna). It holds the data, the secrets (API keys), and does the heavy or slow work.
 
 They talk through **HTTP requests**: the client sends a request ("give me my jobs"), and the server sends back a response (a list of jobs as JSON). Every button in Upajna turns into one of these requests.
 
