@@ -18,7 +18,9 @@ LINKEDIN_EXTERNAL = f"""
 <h3 class="description__job-criteria-subheader">Employment type</h3>
 <span class="description__job-criteria-text">Full-time</span>
 """
-LINKEDIN_EASY = LINKEDIN_EXTERNAL.split("<code")[0] + f'<div class="show-more-less-html__markup">{DESC}</div>'
+LINKEDIN_NO_CODE = LINKEDIN_EXTERNAL.split("<code")[0] + f'<div class="show-more-less-html__markup">{DESC}</div>'
+LINKEDIN_EASY = LINKEDIN_NO_CODE + '<button data-tracking-control-name="public_jobs_apply-link-onsite">Easy Apply</button>'
+LINKEDIN_OFFSITE_HIDDEN = LINKEDIN_NO_CODE + '<a data-tracking-control-name="public_jobs_apply-link-offsite_sign-up-modal">Apply</a>'
 
 
 def test_linkedin_ids_from_every_url_shape():
@@ -46,6 +48,26 @@ def test_linkedin_company_site_job():
 def test_linkedin_easy_apply_job():
     j = parse_linkedin(LINKEDIN_EASY, "4012345678")
     assert j.applyVia == "easy_apply" and "linkedin.com" in j.applyUrl
+
+
+def test_linkedin_company_site_with_hidden_address_is_not_easy_apply():
+    # Real case: the Wingstop job showed "Apply ↗" on LinkedIn but the address was hidden.
+    j = parse_linkedin(LINKEDIN_OFFSITE_HIDDEN, "4012345678")
+    assert j.applyVia == "company_site" and "linkedin.com" in j.applyUrl
+    unknown = parse_linkedin(LINKEDIN_NO_CODE, "4012345678")
+    assert unknown.applyVia == ""          # can't tell: never guess Easy Apply
+
+
+def test_finding_the_original_posting():
+    from app.search.jsearch import pick_original
+    jobs = [
+        {"employer_name": "Wingstop", "job_title": "Data Engineer", "apply_options": [{"apply_link": "https://www.linkedin.com/jobs/view/1"}]},
+        {"employer_name": "Other Co", "job_title": "Data Engineer", "apply_options": [{"apply_link": "https://boards.greenhouse.io/other/jobs/9"}]},
+        {"employer_name": "Wingstop Restaurants Inc.", "job_title": "Data Engineer II",
+         "apply_options": [{"apply_link": "https://wingstop.wd1.myworkdayjobs.com/en-US/careers/job/Dallas/Data-Engineer_R123"}]},
+    ]
+    assert pick_original(jobs, "Data Engineer", "Wingstop Restaurants Inc.").startswith("https://wingstop.wd1.myworkdayjobs.com")
+    assert pick_original(jobs, "Product Manager", "Wingstop Restaurants Inc.") == ""
 
 
 def test_linkedin_blocked_page_asks_for_text():
@@ -139,3 +161,37 @@ def test_unreadable_link_asks_for_description(client, monkeypatch):
     assert r.status_code == 422 and r.json()["needsText"]
     r = client.post("/api/jobs", json={"url": "https://www.linkedin.com/jobs/view/4000000009/", "jd": "Business Analyst. " * 20})
     assert r.status_code == 201
+
+
+def test_hidden_company_link_is_looked_up_then_can_be_pasted(client, monkeypatch):
+    setup(client)
+    import app.main as m
+
+    async def found(title, company):
+        return "https://boards.greenhouse.io/wingstop/jobs/555"
+    monkeypatch.setattr(m.jsearch, "find_original", found)
+    job = client.post("/api/jobs", json={"url": "https://www.linkedin.com/jobs/view/4000000003/", "role": "ba"}).json()
+    assert job["applyVia"] == "company_site" and job["ats"] == "greenhouse"
+
+
+
+def test_hidden_company_link_not_found_asks_you_to_paste_it(client, monkeypatch):
+    # Not found by search: after approving, Tracker asks for the link, and pasting it lets Upajna fill the form.
+    setup(client)
+    import app.main as m
+
+    async def nothing(title, company):
+        return ""
+    monkeypatch.setattr(m.jsearch, "find_original", nothing)
+    job = client.post("/api/jobs", json={"url": "https://www.linkedin.com/jobs/view/4000000013/", "role": "ba"}).json()
+    assert job["ats"] == "linkedin" and job["applyVia"] == "company_site"
+    job = wait_for(lambda: (j := client.get(f"/api/jobs/{job['id']}").json())["status"] == "review" and j)
+    client.post(f"/api/jobs/{job['id']}/approve", json={"answers": [{"question": "Sponsorship?", "answer": "Yes"}]})
+    job = wait_for(lambda: (j := client.get(f"/api/jobs/{job['id']}").json())["status"] == "needs_you" and j)
+    assert "own website" in job["note"] and "Easy Apply" not in job["note"]
+
+    assert client.patch(f"/api/jobs/{job['id']}", json={"applyUrl": "https://www.linkedin.com/jobs/view/1"}).status_code == 400
+    j = client.patch(f"/api/jobs/{job['id']}", json={"applyUrl": "https://boards.greenhouse.io/wingstop/jobs/555"}).json()
+    assert j["ats"] == "greenhouse"
+    client.post(f"/api/jobs/{job['id']}/retry")
+    job = wait_for(lambda: (j := client.get(f"/api/jobs/{job['id']}").json())["status"] == "needs_you" and "Dry run" in j.get("note", "") and j)

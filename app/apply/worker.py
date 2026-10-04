@@ -133,7 +133,11 @@ async def apply_one(job_id: str) -> str:
         return "skipped"
     ats = detect_ats(job.get("applyUrl") or job.get("url") or "")
     if ats not in AUTO_ATS:
-        db.patch_job(job_id, status="needs_you", note=HANDOFF.get(ats, HANDOFF["other"]))
+        note = HANDOFF.get(ats, HANDOFF["other"])
+        if ats == "linkedin" and job.get("applyVia") != "easy_apply":
+            note = (f"This job applies on {job.get('company') or 'the company'}'s own website, but LinkedIn hides that address from Upajna. "
+                    "On LinkedIn, click Apply, copy the address of the page that opens, and paste it below.")
+        db.patch_job(job_id, status="needs_you", note=note)
         return "needs_you"
     db.patch_job(job_id, status="applying", note="")
 

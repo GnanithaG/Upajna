@@ -124,8 +124,13 @@ def parse_linkedin(raw: str, job_id: str) -> LinkJob:
         ext = html.unescape(m.group(1))
         target = parse_qs(urlparse(ext).query).get("url", [""])[0]
         job.applyUrl, job.applyVia = (unquote(target) if target else ext), "company_site"
-    else:
+    elif re.search(r"apply-link-offsite|offsite-apply|apply on company (web)?site", raw, re.I):
+        # Applies on the company's site, but LinkedIn hides the address from signed-out visitors.
+        job.applyUrl, job.applyVia = job.url, "company_site"
+    elif re.search(r"apply-link-onsite|easy apply", raw, re.I):
         job.applyUrl, job.applyVia = job.url, "easy_apply"
+    else:
+        job.applyUrl, job.applyVia = job.url, ""        # can't tell; you'll be asked for the company link
     if not (job.title and job.jd):
         raise LinkError("LinkedIn didn't show this job to Upajna. Paste the job description below and it will carry on.")
     return job
@@ -220,6 +225,9 @@ def _mock(url: str) -> LinkJob:
     if "nosponsor" in url:
         jd += " We are unable to provide visa sponsorship."
     lid = linkedin_id(url)
+    if lid and lid.endswith("3"):  # company-site job whose address LinkedIn hides
+        return LinkJob(url=f"https://www.linkedin.com/jobs/view/{lid}/", source="LinkedIn", title="Data Engineer", company="Wingstop Restaurants Inc.",
+                       location="Dallas, TX", jd=jd, applyVia="company_site", applyUrl=f"https://www.linkedin.com/jobs/view/{lid}/")
     if lid:
         easy = lid.endswith("1")
         return LinkJob(url=f"https://www.linkedin.com/jobs/view/{lid}/", source="LinkedIn", title="Business Analyst", company=f"Example Corp {lid[-2:]}",

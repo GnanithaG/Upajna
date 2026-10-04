@@ -119,6 +119,9 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
 button.chip{appearance:none;border:1px dashed var(--accent);background:none;color:var(--accent);cursor:pointer;font-family:var(--font)}
 button.chip.on{border-style:solid;background:var(--accent);color:var(--on-accent)}
 #retailorAdded{margin-top:10px}
+.linkfix{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;padding:12px 14px;margin-top:4px;border-radius:10px;background:var(--warn-bg,#FDF0DC)}
+.linkfix .row{display:flex;gap:8px}
+.linkfix input{flex:1;min-width:0}
 
 /* ---------- top bar ---------- */
 .topbar{position:sticky;top:0;z-index:10;background:var(--surface);border-bottom:1px solid var(--line);

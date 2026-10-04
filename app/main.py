@@ -22,6 +22,7 @@ from .config import get_settings
 from .documents import letter_docx, read_resume, resume_docx
 from .search import DEFAULT_SEARCH, is_running, run_search
 from .search.filters import blocks_sponsorship, dedupe_key
+from .search import jsearch
 from .search.links import LinkError, clean_url, read_job_link
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -227,6 +228,14 @@ async def add_job(body: NewJob):
         except LinkError as e:
             # 422 + needsText tells the page to show the "paste the description" box.
             return JSONResponse({"error": str(e), "needsText": True}, status_code=422)
+        # LinkedIn hides company-site application links from signed-out visitors: look up the original posting.
+        if found.get("source") == "LinkedIn" and found.get("applyVia") != "easy_apply" and "linkedin.com" in found.get("applyUrl", ""):
+            try:
+                original = await jsearch.find_original(found.get("title", ""), found.get("company", ""))
+            except Exception:
+                original = ""
+            if original:
+                found.update(applyUrl=original, applyVia="company_site")
     elif len(body.jd) < 150:
         raise HTTPException(400, "Paste a job link, or the full job description.")
     try:
@@ -308,7 +317,13 @@ def patch_job(job_id: str, body: JobPatch):
     if body.trackerStatus:
         patch["trackerStatus"] = body.trackerStatus
     if body.applyUrl:
-        patch["applyUrl"] = body.applyUrl
+        try:
+            patch["applyUrl"] = clean_url(body.applyUrl)
+        except LinkError as e:
+            raise HTTPException(400, str(e))
+        if "linkedin.com" in patch["applyUrl"]:
+            raise HTTPException(400, "That's still a LinkedIn address. Click Apply on LinkedIn and copy the address of the company page it opens.")
+        patch["applyVia"] = "company_site"
     if body.markSubmitted:
         patch.update(status="submitted", appliedAt=date.today().isoformat(), followUp=(date.today() + timedelta(days=7)).isoformat(), trackerStatus="Applied", note="")
     if body.status in ("new", "skipped"):

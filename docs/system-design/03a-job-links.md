@@ -70,6 +70,16 @@ LinkedIn jobs come in two kinds, and Upajna works out which one from the page:
 - **"Apply" on the company website:** the page contains the company's real application link. If it's Greenhouse, Lever or Ashby, Upajna fills the form for you after you approve.
 - **Easy Apply:** the form only exists inside your LinkedIn account. Upajna tailors everything, then moves the job to **Needs you**, with your resume to download and your answers ready to copy. You click Easy Apply and paste.
 
+### A lesson from real use: don't guess
+
+The first version assumed "LinkedIn didn't show the company's address" meant "Easy Apply". The first real job proved it wrong: Wingstop's posting said **Apply ↗** (company site), but signed-out visitors don't get the address. Now:
+
+1. Upajna reads LinkedIn's own marker for which kind of button it is, and if it can't tell, it says so instead of guessing.
+2. For company-site jobs, it looks up the same job through JSearch (title + company) to find the original application link.
+3. If that fails, the Tracker card asks you to paste the address of the page LinkedIn's Apply button opens, and Upajna continues from there.
+
+The design principle: when the system can't know something, **ask the person** rather than invent an answer. It's the same rule the resume tailoring follows.
+
 ## Try it
 
 1. Copy a LinkedIn job link and paste it into the box at the top of the Inbox.

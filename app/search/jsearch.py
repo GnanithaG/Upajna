@@ -56,3 +56,40 @@ async def search(title: str, hours: int = 24) -> list[dict]:
         r = await c.get(f"https://{s.jsearch_host}/search", params=params, headers=headers)
         r.raise_for_status()
         return [normalize(j) for j in r.json().get("data") or []]
+
+
+def _norm(s: str) -> set[str]:
+    stop = {"inc", "llc", "corp", "corporation", "co", "ltd", "the", "senior", "sr", "jr", "ii", "iii"}
+    return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower()) if w not in stop}
+
+
+async def find_original(title: str, company: str) -> str:
+    """Find the company's own application link for a job seen on LinkedIn (1 JSearch request).
+
+    Returns "" when there's no key, no confident match, or the only link is LinkedIn again.
+    """
+    s = get_settings()
+    if not (s.jsearch_api_key and title and company):
+        return ""
+    params = {"query": f"{title} {company}", "page": "1", "num_pages": "1", "country": "us", "date_posted": "month"}
+    headers = {"X-RapidAPI-Key": s.jsearch_api_key, "X-RapidAPI-Host": s.jsearch_host}
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.get(f"https://{s.jsearch_host}/search", params=params, headers=headers)
+        r.raise_for_status()
+        jobs = r.json().get("data") or []
+    return pick_original(jobs, title, company)
+
+
+def pick_original(jobs: list[dict], title: str, company: str) -> str:
+    """The first result from the same company with a similar title and a non-LinkedIn application link."""
+    want_co, want_title = _norm(company), _norm(title)
+    for j in jobs:
+        co, ti = _norm(j.get("employer_name", "")), _norm(j.get("job_title", ""))
+        if not (want_co and co and (want_co <= co or co <= want_co)):
+            continue
+        if len(want_title & ti) / max(len(want_title), 1) < 0.6:
+            continue
+        link = _apply_link(j)
+        if link and "linkedin.com" not in link:
+            return link
+    return ""

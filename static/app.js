@@ -420,12 +420,26 @@ function renderTracker() {
           ${j.result ? `<a class="btn small ghost" href="/api/jobs/${encodeURIComponent(j.id)}/resume.docx">Resume</a>` : ""}
         </span>
         <div class="jd-row" data-shot hidden><img class="shot" alt="Screenshot of the application form"></div>
+        ${j.status === "needs_you" && j.ats === "linkedin" ? `<div class="linkfix">
+          <label class="small muted" for="lf-${esc(j.id)}">If LinkedIn's <strong>Apply</strong> button opens the company's website, paste that page's address here and Upajna will take it from there.</label>
+          <div class="row"><input type="text" id="lf-${esc(j.id)}" inputmode="url" placeholder="https://… (the company's application page)"><button class="btn small primary" data-linkfix>Use this link</button></div>
+        </div>` : ""}
       </div>`;
     }).join("");
   $$(".tr[data-id]", box).forEach((el) => {
     const id = el.dataset.id;
     $("[data-ts]", el)?.addEventListener("change", (e) => api(`/jobs/${encodeURIComponent(id)}`, { method: "PATCH", body: { trackerStatus: e.target.value } }).then(() => { toast("Moved to " + e.target.value); refresh(); }).catch((x) => toast(x.message)));
     $("[data-retry]", el)?.addEventListener("click", () => api(`/jobs/${encodeURIComponent(id)}/retry`, { method: "POST" }).then(() => { toast("Trying again"); refresh(); schedulePoll(); }).catch((x) => toast(x.message)));
+    $("[data-linkfix]", el)?.addEventListener("click", async () => {
+      const url = $(".linkfix input", el).value.trim();
+      if (!url) return toast("Paste the company's application address first");
+      try {
+        const j = await api(`/jobs/${encodeURIComponent(id)}`, { method: "PATCH", body: { applyUrl: url } });
+        await api(`/jobs/${encodeURIComponent(id)}/retry`, { method: "POST" });
+        toast(AUTO.includes(j.ats) ? "Got it. Filling in the application now." : "Saved. This site needs your own sign-in, so your answers are ready to copy.");
+        refresh(); schedulePoll();
+      } catch (x) { toast(x.message); }
+    });
     $("[data-mine]", el)?.addEventListener("click", () => api(`/jobs/${encodeURIComponent(id)}`, { method: "PATCH", body: { markSubmitted: true } }).then(() => { toast("Added to tracker"); refresh(); }).catch((x) => toast(x.message)));
     $("[data-shotbtn]", el)?.addEventListener("click", async () => {
       const row = $("[data-shot]", el), img = $("img", row);
