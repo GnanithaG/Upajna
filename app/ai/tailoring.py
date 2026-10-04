@@ -47,5 +47,9 @@ async def tailor_job(job: dict, profile: dict, resume_text: str) -> TailorResult
         title=job.get("title", ""), company=job.get("company", ""), location=job.get("location", ""), jd=job.get("jd", ""),
     )
     result = await ask(prompt, TailorResult, max_tokens=12000, mock=lambda: _mock(job, profile))
+    # Skills you confirmed are yours: never report them as missing.
+    have = {c.strip().lower() for c in profile.get("confirmed") or []}
+    if have:
+        result.ats.missing = [m for m in result.ats.missing if m.strip().lower() not in have]
     result.fileBase = file_base(profile.get("name") or result.resume.name, result.company or job.get("company", ""), result.role or job.get("title", ""))
     return result

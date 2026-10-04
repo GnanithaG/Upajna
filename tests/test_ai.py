@@ -49,3 +49,31 @@ def test_ask_retries_once_with_validation_error(monkeypatch):
 def test_prompts_render_without_leftover_placeholders():
     p = ai_client.render("tailor_resume", profile="P", resume="R", title="T", company="C", location="L", jd="J")
     assert "$profile" not in p and "$jd" not in p and '{"company"' in p
+
+
+def test_confirmed_skills_reach_the_prompt_and_are_never_missing(client):
+    from app.ai.client import render
+    from app.ai.tailoring import profile_lines
+
+    lines = profile_lines({"name": "A", "confirmed": ["Redshift", "Tableau"]})
+    assert "confirmed they have: Redshift, Tableau" in lines
+    assert "CONFIRMED SKILLS" in render("tailor_resume", profile=lines, resume="r", title="t", company="c", location="l", jd="j")
+
+    # The mock tailoring reports "Tableau" as missing; once confirmed, it must not be.
+    import time
+    client.post("/api/login", json={"password": "test-pass"})
+    roles = client.get("/api/roles").json(); roles[0]["resume"] = "Business Analyst " * 30
+    client.put("/api/roles", json=roles)
+    job = client.post("/api/jobs", json={"jd": "Business Analyst role. " * 20, "title": "Business Analyst"}).json()
+    get = lambda: client.get(f"/api/jobs/{job['id']}").json()
+    for _ in range(100):
+        if get()["status"] == "review": break
+        time.sleep(0.05)
+    assert "Tableau" in get()["result"]["ats"]["missing"]
+    client.put("/api/settings/profile", json={"confirmed": ["tableau"]})
+    client.post("/api/jobs/tailor", json={"ids": [job["id"]]})
+    for _ in range(100):
+        j = get()
+        if j["status"] == "review" and "Tableau" not in j["result"]["ats"]["missing"]: break
+        time.sleep(0.05)
+    assert "Tableau" not in get()["result"]["ats"]["missing"]

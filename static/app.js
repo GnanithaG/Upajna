@@ -10,7 +10,8 @@ const AUTO = ["greenhouse", "lever", "ashby"];
 const PF = ["name", "email", "phone", "location", "linkedin", "portfolio", "auth", "sponsor", "salary", "start", "relocate", "workpref", "years", "eeo", "answers"];
 
 const S = { jobs: [], settings: { profile: {}, search: {} }, roles: [], status: {}, sel: new Set(), open: new Set(),
-  sort: "score", filters: new Set(), roleF: "", openId: null, tf: "All", rtab: "resume" };
+  sort: "score", filters: new Set(), roleF: "", openId: null, tf: "All", rtab: "resume",
+  ticked: new Set() };  // missing-keyword chips you've tapped (a vague label like "certification" maps to the exact name you typed)
 const roleById = (id) => S.roles.find((r) => r.id === id);
 const roleName = (id) => roleById(id)?.name || "";
 const roleTag = (j) => (S.roles.length > 1 && roleName(j.role) ? `<span class="rtag">${esc(roleName(j.role))}</span>` : "");
@@ -258,8 +259,11 @@ function renderDetail(job) {
       <div class="chips">${found.map((k) => `<span class="chip">${esc(k.term)}</span>`).join("")}${missingKw.map((k) => `<span class="chip miss">${esc(k.term)}</span>`).join("")}</div>
     </div>` : ""}
     ${(ats.missing || []).filter(Boolean).length ? `<div class="rail-block">
-      <span class="small faint">Missing from your resume. Add any you really have, then redo tailoring.</span>
-      <div class="chips">${ats.missing.filter(Boolean).map((m) => `<button type="button" class="chip" data-have="${esc(m)}">+ ${esc(m)}</button>`).join("")}</div>
+      <span class="small faint">Missing from your resume. Tap any you really have, then redo tailoring.</span>
+      <div class="chips">${ats.missing.filter(Boolean).map((m) => isConfirmed(m)
+        ? `<button type="button" class="chip on" data-unhave="${esc(m)}" title="Tap to remove">✓ ${esc(m)}</button>`
+        : `<button type="button" class="chip" data-have="${esc(m)}">+ ${esc(m)}</button>`).join("")}</div>
+      ${ats.missing.some(isConfirmed) ? `<button type="button" class="btn small primary" id="retailorAdded">Redo tailoring with ${ats.missing.filter(isConfirmed).length} added skill${ats.missing.filter(isConfirmed).length > 1 ? "s" : ""}</button>` : ""}
     </div>` : ""}
     <div class="rail-block">
       <span class="small faint">Answers ${asks ? "· " + asks + " need you" : "ready"}</span>
@@ -294,10 +298,29 @@ function renderDetail(job) {
       toast(`Tailoring again from your ${roleName(e.target.value)} resume…`); await refresh(); schedulePoll();
     } catch (x) { toast(x.message); e.target.value = job.role; }
   });
+  const retailor = async (msg) => { try { await api("/jobs/tailor", { method: "POST", body: { ids: [job.id] } }); toast(msg); await refresh(); schedulePoll(); } catch (e) { toast(e.message); } };
+  $("#retailorAdded")?.addEventListener("click", () => retailor("Tailoring again with your added skills…"));
   $$("[data-have]", rail).forEach((b) => b.addEventListener("click", async () => {
-    const p = S.settings.profile; const confirmed = [...new Set([...(p.confirmed || []), b.dataset.have])];
-    try { S.settings.profile = await api("/settings/profile", { method: "PUT", body: { confirmed } }); b.disabled = true; b.textContent = "✓ " + b.dataset.have; toast("Added. Choose Redo tailoring when you're done."); } catch (e) { toast(e.message); }
+    let skill = b.dataset.have;
+    // A certification needs its exact name, or the resume would claim something vague.
+    if (/certif/i.test(skill)) {
+      const named = prompt(`Which certification do you hold? Type its exact name, e.g. "AWS Certified Data Engineer – Associate".`, "");
+      if (!named || !named.trim()) return;
+      skill = named.trim();
+    }
+    const names = [...new Set([...(S.settings.profile.confirmed || []), skill])];
+    try { S.settings.profile = await api("/settings/profile", { method: "PUT", body: { confirmed: names } }); S.ticked.add(b.dataset.have.toLowerCase()); renderDetail(job); toast(`Added ${skill}. Choose "Redo tailoring with added skills" when you're done.`); } catch (e) { toast(e.message); }
   }));
+  $$("[data-unhave]", rail).forEach((b) => b.addEventListener("click", async () => {
+    const drop = b.dataset.unhave.toLowerCase();
+    const names = (S.settings.profile.confirmed || []).filter((c) => c.toLowerCase() !== drop);
+    S.ticked.delete(drop);
+    try { S.settings.profile = await api("/settings/profile", { method: "PUT", body: { confirmed: names } }); renderDetail(job); toast("Removed " + b.dataset.unhave); } catch (e) { toast(e.message); }
+  }));
+}
+function isConfirmed(term) {
+  const t = String(term).toLowerCase();
+  return S.ticked.has(t) || (S.settings.profile.confirmed || []).some((c) => c.toLowerCase() === t);
 }
 function resumeHTML(R) {
   const sec = (t, inner) => (inner ? `<div class="rs">${esc(t)}</div>${inner}` : "");
@@ -416,6 +439,7 @@ function renderTracker() {
 function fillForms() {
   const { profile, search } = S.settings;
   PF.forEach((f) => { const el = $("#p_" + f); if (el !== document.activeElement) el.value = profile[f] || ""; });
+  if ($("#p_confirmed") !== document.activeElement) $("#p_confirmed").value = (profile.confirmed || []).join(", ");
   $("#s_level").value = search.level || "Mid-Senior";
   $("#s_sponsor").value = search.sponsorship || "needs";
   $$("#s_types input").forEach((i) => (i.checked = (search.jobTypes || ["Full-time"]).includes(i.value)));
@@ -434,6 +458,7 @@ function renderAuto() {
 }
 $("#saveProfile").addEventListener("click", async () => {
   const body = {}; PF.forEach((f) => (body[f] = $("#p_" + f).value.trim()));
+  body.confirmed = $("#p_confirmed").value.split(",").map((x) => x.trim()).filter(Boolean);
   try { S.settings.profile = await api("/settings/profile", { method: "PUT", body }); renderTopbar(); toast("Details saved"); } catch (e) { toast(e.message); }
 });
 $("#saveSearch").addEventListener("click", async () => {
